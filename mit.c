@@ -25,25 +25,49 @@ void *mex_creator(void *p){
 	Mex m;
 	FILE *f;
 	int q, write_result;
-	struct sockaddr_in Serv;
+	struct sockaddr_in Local, Serv;
+	char remote_address[100];
+	int port;
 	int mex_numb,mex_numb_total, mex_size, sender, socketfd;
+	int connect_result;	
+	srand(time(NULL));
+	
+	/* estrazione dei parametri del thread */
+	strcpy(remote_address, ((param *)p)->addr);	/* Indirizzo di TunnelTX*/
+	port = ((param *)p)->port;					/* Porta di TunnelTX*/
+	sender = ((param *)p)->sender;					/* Numero host (per variazione messaggi)*/
+	free(p);
+	
+	socketfd = socket(AF_INET, SOCK_STREAM, 0);
+	/*Collegamento all'indirizzo e porta locali*/
+	memset ( &Local, 0, sizeof(Local) );
+	Local.sin_family		=	AF_INET;
+	Local.sin_addr.s_addr	=	htonl(INADDR_ANY);         /* INADDR_ANY = indirizzo locale */
+	Local.sin_port	=	htons(0);
+	
+	bind(socketfd, (struct sockaddr*) &Local, sizeof(Local));
+
+	/*Collegamento all'indirizzo remoto*/
+	memset ( &Serv, 0, sizeof(Serv) );
+	Serv.sin_family	 =	AF_INET;
+	Serv.sin_addr.s_addr =	inet_addr(remote_address);
+	Serv.sin_port		 =	htons(port);
+	
 	mex_numb = rand() % MEX_NUMB; 		
 	mex_numb = mex_numb + 1;
 	mex_numb_total = mex_numb;
-	
-	/* estrazione dei parametri del thread */
-	sender = ((param *)p)->sender;
-	socketfd = ((param *)p)->socket;
-	Serv = ((param *)p)->Serv;
-	free(p);
 	
 	mex_size = rand() % MEX_SIZE;
 	fflush(stdout);
 	q = rand() % 10;
 	
 	/*Connect*/
-	printf("Connessione a TunnelTX.... ");
-	connect(socketfd, (struct sockaddr*) &Serv, sizeof(Serv));
+	connect_result = connect(socketfd, (struct sockaddr*) &Serv, sizeof(Serv));
+	if (connect_result < 0 ){
+		printf("Sender %d errore connessione",sender);
+		perror("");
+		pthread_exit(NULL);
+	}
 	printf("Connesso\n");
 	
 	while(mex_numb != 0){						
@@ -72,39 +96,24 @@ void *mex_creator(void *p){
 }
 
 
+
+
+
+
 /*
  * Main Mittenti
  * */ 
 int main(int argc, char *argv[]){
-	pthread_t threadID[NUM_HOST];
+	pthread_t threadID[SENDER_NUMB];
 	int i,t;
 	char remote_address[100];
-	int port=atoi(argv[2]);
+	int port = atoi(argv[2]);
 	int tmp_pid;
-	struct sockaddr_in Local, Serv;
-	int socketfd;
 	strncpy(remote_address, argv[1], 99);
+	
 	printf("ip %s\nportaTX %d\n\n",remote_address, port);
-	srand(time(NULL));
-	socketfd = socket(AF_INET, SOCK_STREAM, 0);
-	
-	/*Collegamento all'indirizzo e porta locali*/
-	memset ( &Local, 0, sizeof(Local) );
-	Local.sin_family		=	AF_INET;
-	Local.sin_addr.s_addr	=	htonl(INADDR_ANY);         /* INADDR_ANY = indirizzo locale */
-	Local.sin_port	=	htons(0);
-	
-	bind(socketfd, (struct sockaddr*) &Local, sizeof(Local));
 
-	/*Collegamento all'indirizzo remoto*/
-	memset ( &Serv, 0, sizeof(Serv) );
-	Serv.sin_family	 =	AF_INET;
-	Serv.sin_addr.s_addr =	inet_addr(remote_address);
-	Serv.sin_port		 =	htons(port);
-	
-	
-
-	for(i = 0; i < NUM_HOST; i++){	
+	for(i = 0; i < SENDER_NUMB; i++){	
 		
 		param *p;
 		p = malloc(sizeof(struct param));
@@ -115,11 +124,10 @@ int main(int argc, char *argv[]){
 			exit(1);
 		
 		}else{
-			
+			strcpy(p->addr,remote_address);	/* Indirizzo di TunnelTX*/
+			p->port = port;
 			p->sender = i;
-			p->socket = socketfd;
-			p->Serv = Serv;
-			
+						
 			tmp_pid = pthread_create(&threadID[i],NULL,mex_creator,(void*) p);		
 			if(tmp_pid != 0) {
 				printf("Chiamata a pthread_create() fallita.\n Errore: %d \"%s\"\n", errno,strerror(errno));
@@ -129,8 +137,8 @@ int main(int argc, char *argv[]){
 			p = NULL;
 		}
 	}
-	printf("Generati %d mittenti\n\n", NUM_HOST);
-	for(t = 0; t < NUM_HOST; t++) {
+	printf("Generati %d mittenti\n\n", SENDER_NUMB);
+	for(t = 0; t < SENDER_NUMB; t++) {
 		int error;
 
 		/* attendo la terminazione del thread t-esimo  */

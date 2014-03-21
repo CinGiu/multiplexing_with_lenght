@@ -26,9 +26,10 @@ void usage(void){printf ("usage: ./tunnelTX RX_IP PORT_TO_RX PORT_FROM_MITT\n");
 int main( int argc, char *argv[] ){
 	Mex m;
 	int q,i, mex_counter = 0;
+	int select_result, select_nfd; 
 	struct sockaddr_in addr_Tx, addr_mit; 	
 	struct sockaddr_in serv_addr, RX_addr;
-    int sock_RX, sock_mit, newsockfd[NUM_HOST], port_RX, port_mit;
+    int sock_RX, sock_mit, newsockfd[SENDER_NUMB], port_RX, port_mit;
     socklen_t clilen;
     char address_RX[100];
     int OptVal = 1;    
@@ -99,26 +100,27 @@ int main( int argc, char *argv[] ){
     listen(sock_mit,100);	
     clilen = sizeof(addr_mit);
     
+    
+     printf("Inizio accept per mittenti...\n");
     /* Accetto le connessioni per i mittenti e creo la list per la selct*/
-    for (i = 0; i < NUM_HOST; i++){
+    for (i = 0; i < SENDER_NUMB; i++){
 		newsockfd[i] = accept(sock_mit, (struct sockaddr *) &addr_mit, &clilen);
 		if( newsockfd[i] < 0 ){
 			perror("errore nella accept");
 			exit(1);
 		}else{
-			
+			printf("socket n° %d accettato\n",i);
 			FD_SET(newsockfd[i], &fset_mitt); 	/* Nuovo Socket in fset per la select*/
 		
 		}
 	}	
     printf("Tutti gli host accettati\n");	
-	
+	select_nfd = (SENDER_NUMB * MEX_NUMB) + 1;
 	while ( 1 ){
-		
-		
-		
-		
-		q = readn(newsockfd,&m,size_header);
+		select_result = select(select_nfd,&fset_mitt,NULL, NULL,NULL);
+		printf("Select_result %d\n", select_result);
+		sleep(2);
+		/*q = readn(newsockfd,&m,size_header);
 		if(q == 0){
 			printf("Messaggi letti: %d\n", mex_counter);
 			exit(0);
@@ -138,8 +140,8 @@ int main( int argc, char *argv[] ){
 		}
 		mex_counter ++;
 		fflush(stdout);
+		* */
 	}
-	close(newsockfd);
-
+	
 	return 0;
 }
