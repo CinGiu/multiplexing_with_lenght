@@ -16,11 +16,12 @@
 
 int main( int argc, char *argv[] ){
 	Mex m;
+	Recv r[SENDER_NUMB];
 	struct sockaddr_in rcv_addr, TX_addr;    
-    int sock_TX, sock_rcv[200], sock_rcv_main, newsockfd_rcv,newsockfd_TX;
+    int sock_TX, sock_rcv_main, newsockfd_rcv,newsockfd_TX;
     int port_TX, port_rcv;
-    int q,t;
-    unsigned char sock_id_temp;
+    int i,q,write_result, tot_mex;
+    char temp_recv;
     int opt = 1;
 	socklen_t clilen; 
 	clilen = sizeof(TX_addr);
@@ -76,12 +77,13 @@ int main( int argc, char *argv[] ){
 	
 	/*-----------------Connetto ogni ricevitore e salvo il socket----------------------*/
 	printf("Aspetto i ricevitori\n");
-    for(q = 0; q<10; q++){
+    for(q = 0; q<SENDER_NUMB; q++){
 		newsockfd_rcv = accept(sock_rcv_main,(struct sockaddr *) &rcv_addr, &clilen);
-		read(newsockfd_rcv, &sock_id_temp, sizeof(sock_id_temp));
-		printf("numero ric = %d ---> numero socket = %d\n", sock_id_temp,newsockfd_rcv);
-		sock_rcv[sock_id_temp] = newsockfd_rcv;	
+		read(newsockfd_rcv, &temp_recv, sizeof(temp_recv));
 		
+		r[q].numb =  temp_recv;	
+		r[q].socket =  newsockfd_rcv;	
+		printf("numero ric = %c ---> numero socket = %d\n", r[q].numb,r[q].socket);
 	}
 	
 	/* Accept per TX */
@@ -90,29 +92,41 @@ int main( int argc, char *argv[] ){
             perror("ERROR on accept");
             exit(1);
     }
-
+	tot_mex = 0;
     /* Inizio ascolto da TX e passo ai ricevitori */
     while( 1 ) {
-			q = readn(newsockfd_TX,&m,(sizeof(m)-sizeof(char*)));
-			
-			if(q == 0){
-				exit(0);
+		/*	Leggo l'Header	*/
+		q = readn(newsockfd_TX,&m,size_header);
+		if(q == 0){
+			/*Fine, non ci sono piu pacchetti da leggere*/
+			printf("totale messaggi: %d\n",tot_mex); 
+			exit(0);
+		}
+		
+		if (q < 0){
+			perror("ERROR1 reading from socket");
+			exit(0);
+		}
+		/*	Leggo il Body	*/
+		q = readn(newsockfd_TX,&m.body,m.size);
+		if (q < 0){
+			perror("ERROR2 reading from socket");
+			exit(1);
+		}
+		
+		
+		for (i=0;i<SENDER_NUMB;i++){
+			if(m.recv == r[i].numb){
+				/* mando al ricevitore giusto*/
+				printf("da = %c - a = %c %c %d - size = %d \n", m.sender,m.recv, r[i].numb, r[i].socket,m.size);
+				write_result = sendn(r[i].socket,&m, size_header + m.size);
+				if(write_result < 0){
+					perror("errore in scrittura");
+				}
 			}
-			if (q < 0){
-				perror("ERROR1 reading from socket");
-				exit(0);
-			}
-
-			if (q < 0){
-				perror("ERROR2 reading from socket");
-				exit(1);
-			}
-			printf("da = %c - a = %c - size = %d body = %s\n", m.sender,m.recv,m.size,m.body);
-
-			fflush(stdout);		
-			/* mando al ricevitore giusto*/
-			/*send(sock_rcv[m.recv],&m, sizeof(m),0);
-			close(sock_rcv[m.recv]);*/
+		}
+		tot_mex++;		 
+		/*close(sock_rcv[m.recv]);*/
 	}
     return 0;
 }

@@ -35,7 +35,7 @@ void *mex_creator(void *p){
 	/* estrazione dei parametri del thread */
 	strcpy(remote_address, ((param *)p)->addr);	/* Indirizzo di TunnelTX*/
 	port = ((param *)p)->port;					/* Porta di TunnelTX*/
-	sender = ((param *)p)->sender;					/* Numero host (per variazione messaggi)*/
+	sender = ((param *)p)->host;					/* Numero host (per variazione messaggi)*/
 	free(p);
 	
 	socketfd = socket(AF_INET, SOCK_STREAM, 0);
@@ -64,7 +64,7 @@ void *mex_creator(void *p){
 	/*Connect*/
 	connect_result = connect(socketfd, (struct sockaddr*) &Serv, sizeof(Serv));
 	if (connect_result < 0 ){
-		printf("Sender %d errore connessione",sender);
+		printf("Sender %d errore connessione\n",sender);
 		perror("");
 		pthread_exit(NULL);
 	}
@@ -92,16 +92,12 @@ void *mex_creator(void *p){
 		mex_size = rand() % MEX_SIZE;
 		q = rand() % 10;
 	}	
-	pthread_exit(NULL);
+	close(socketfd);
+	pthread_exit((void *)mex_numb_total);
 }
-
-
-
-
-
-
+ 
 /*
- * Main Mittenti
+ * Main Mittenti 
  * */ 
 int main(int argc, char *argv[]){
 	pthread_t threadID[SENDER_NUMB];
@@ -109,6 +105,7 @@ int main(int argc, char *argv[]){
 	char remote_address[100];
 	int port = atoi(argv[2]);
 	int tmp_pid;
+	int mex_total = 0;
 	strncpy(remote_address, argv[1], 99);
 	
 	printf("ip %s\nportaTX %d\n\n",remote_address, port);
@@ -126,7 +123,7 @@ int main(int argc, char *argv[]){
 		}else{
 			strcpy(p->addr,remote_address);	/* Indirizzo di TunnelTX*/
 			p->port = port;
-			p->sender = i;
+			p->host = i;
 						
 			tmp_pid = pthread_create(&threadID[i],NULL,mex_creator,(void*) p);		
 			if(tmp_pid != 0) {
@@ -140,19 +137,19 @@ int main(int argc, char *argv[]){
 	printf("Generati %d mittenti\n\n", SENDER_NUMB);
 	for(t = 0; t < SENDER_NUMB; t++) {
 		int error;
-
+		void *returnValue;
+		
 		/* attendo la terminazione del thread t-esimo  */
-		error=pthread_join( threadID[t] , NULL );
+		error=pthread_join( threadID[t] , &returnValue );
 		if(error!=0){
 			printf("pthread_join() failed: error=%d\n", error ); 
 			exit(-1);
 		}
 		else {
-			/*
-			printf("Mittente %d-esimo ID=%d finisce\n", t, (int) threadID[t]);
-			*/
+			int mex_num = (int)returnValue;
+			mex_total = mex_total + mex_num;
 		}
 	}
-	
+	printf("messaggi totali: %d\n", mex_total);
 	return 0;
 }
